@@ -25,7 +25,7 @@ body { font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif; background:
 <body>
 <div class="header">
 <h1>휴대폰 일별 판매 예측 대시보드</h1>
-<p>데이터 기준: 2026-08-06 (D+2 15시 관측) | 일별예측: 7시리즈 개통기간 비중 역산 | Today 추정: 과거-합계 전보종 시간대 비중 적용</p>
+<p>데이터 기준: 2026-08-06 (D+2 18시 관측) | 일별예측: 7시리즈 개통기간 비중 역산 | Today 추정: 과거-합계 전보종 시간대 비중 적용</p>
 </div>
 <style>
 .filters { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
@@ -134,7 +134,7 @@ function getTodayDDay() {
 const HOURLY_TOTAL = {
   'D+0': [266, 688, 776, 873, 845, 899],  // 합계 4,347 (완전)
   'D+1': [794, 731, 564, 527, 474, 498],  // 합계 3,588 (완전)
-  'D+2': [483, 430, 378, null, null, null],  // ~15시까지 관측 (일누적 1,291)
+  'D+2': [483, 430, 378, 431, null, null],  // ~18시까지 관측 (일누적 1,722)
 };
 
 // 과거 전보종 시간대별 비중(일) - 7시리즈 D+0~D+3 평균 사용
