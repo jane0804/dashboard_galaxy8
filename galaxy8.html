@@ -25,7 +25,7 @@ body { font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif; background:
 <body>
 <div class="header">
 <h1>휴대폰 일별 판매 예측 대시보드</h1>
-<p>데이터 기준: 2026-08-06 (D+2 09시 관측) | 일별예측: 7시리즈 개통기간 비중 역산 | Today 추정: 과거-합계 전보종 시간대 비중 적용</p>
+<p>데이터 기준: 2026-08-06 (D+2 12시 관측) | 일별예측: 7시리즈 개통기간 비중 역산 | Today 추정: 과거-합계 전보종 시간대 비중 적용</p>
 </div>
 <style>
 .filters { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
@@ -134,7 +134,7 @@ function getTodayDDay() {
 const HOURLY_TOTAL = {
   'D+0': [266, 688, 776, 873, 845, 899],  // 합계 4,347 (완전)
   'D+1': [794, 731, 564, 527, 474, 498],  // 합계 3,588 (완전)
-  'D+2': [474, null, null, null, null, null],  // ~9시까지 관측
+  'D+2': [483, 430, null, null, null, null],  // ~12시까지 관측 (일누적 913)
 };
 
 // 과거 전보종 시간대별 비중(일) - 7시리즈 D+0~D+3 평균 사용
@@ -191,14 +191,21 @@ function predictCurve() {
 // Daily Tracker "과거-합계 전보종" D-day별 시간대 비중 사용
 // ============================================================
 
-// 과거-합계 전보종 시간대별 비중(일) - Daily Tracker "과거-합계 전보종**" 행 기준
-// [~9시, ~12시, ~15시, ~18시, ~21시, ~24시] 각 D-day별
-const PAST_TOTAL_HOURLY_RATIO = {
-  'D+0': [0.04, 0.07, 0.16, 0.22, 0.22, 0.29],  // 51+96+235+320+324+415 = 1441
-  'D+1': [0.21, 0.20, 0.16, 0.17, 0.13, 0.13],  // 452+421+340+355+286+286 = 2140
-  'D+2': [0.20, 0.16, 0.15, 0.16, 0.17, 0.16],  // 280+217+209+227+239+227 = 1399
-  'D+3': [0.17, 0.18, 0.16, 0.19, 0.15, 0.15],  // 204+221+199+234+185+191 = 1234
+// Daily Tracker "과거-합계 전보종**" 원본 체결건수 (반올림 없이 정확한 비중 계산용)
+const PAST_TOTAL_HOURLY = {
+  'D+0': [51, 96, 235, 320, 324, 415],    // 합계 1,441
+  'D+1': [452, 421, 340, 355, 286, 286],  // 합계 2,140
+  'D+2': [280, 217, 209, 227, 239, 227],  // 합계 1,399
+  'D+3': [204, 221, 199, 234, 185, 191],  // 합계 1,234
 };
+
+// 시간대별 비중 동적 계산 (원본 값으로부터)
+function getPastHourlyRatio(dayKey) {
+  const hourly = PAST_TOTAL_HOURLY[dayKey];
+  if (!hourly) return null;
+  const total = hourly.reduce((a, b) => a + b, 0);
+  return hourly.map(v => v / total);
+}
 
 // HOURLY_TOTAL[dayKey]에서 실적이 있는 마지막 시간대 인덱스 반환
 function getLatestObservedTimeIdx(dayIdx) {
@@ -228,8 +235,8 @@ function predictToday(dayIdx, observedTimeIdx) {
   const actualCount = actualSlots.length;
   if (actualCount === 0) return null;
   
-  // 해당 D-day의 과거-합계 전보종 시간대별 비중 사용 (Daily Tracker 기준)
-  const refRatios = PAST_TOTAL_HOURLY_RATIO[dayKey] || PAST_TOTAL_HOURLY_RATIO['D+1'];
+  // 해당 D-day의 과거-합계 전보종 시간대별 비중 사용 (원본 체결건수로 정확 계산)
+  const refRatios = getPastHourlyRatio(dayKey) || getPastHourlyRatio('D+1');
   
   // 관측 시점까지의 누적 비중
   const cumRatioAtTime = refRatios.slice(0, actualCount).reduce((a,b) => a+b, 0);
