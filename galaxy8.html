@@ -83,7 +83,7 @@ tr:hover td { background:#f1f3f5; }
 
 <!-- Section 3: 상세 테이블 -->
 <div class="card">
-<h3>일별 상세 데이터</h3>
+<h3>일별 상세 데이터 <span style="font-size:11px; font-weight:normal; color:#888; float:right;">* 전작대비 = sum(폴드8, 폴드8 ultra, 플립8) / sum(폴드7, 플립7) &nbsp;|&nbsp; * 폴드8시리즈비중 = sum(폴드8, 폴드8 ultra, 플립8) / 현재-합계 전기종</span></h3>
 <div class="table-wrapper" style="max-height:500px; overflow-y:auto;">
 <table id="detail-table"></table>
 </div>
@@ -198,6 +198,46 @@ const PAST_TOTAL_HOURLY = {
   'D+2': [280, 217, 209, 227, 239, 227],  // 합계 1,399
   'D+3': [204, 221, 199, 234, 185, 191],  // 합계 1,234
 };
+
+// Daily Tracker 기종별 시간대 체결건수 (전작대비/폴드8시리즈비중 계산용)
+const MODEL_HOURLY = {
+  fold7: {
+    'D+0': [28, 78, 188, 272, 260, 336],
+    'D+1': [383, 336, 273, 260, 206, 199],
+    'D+2': [210, 155, 150, 157, 174, 160],
+    'D+3': [158, 149, 132, 167, 131, 133],
+  },
+  flip7: {
+    'D+0': [5, 1, 20, 25, 38, 51],
+    'D+1': [40, 61, 42, 51, 49, 57],
+    'D+2': [35, 41, 29, 31, 34, 38],
+    'D+3': [23, 24, 33, 38, 30, 29],
+  },
+  fold8: {
+    'D+0': [140, 503, 561, 613, 575, 632],
+    'D+1': [538, 483, 343, 328, 292, 307],
+    'D+2': [298, 260, 216, 267, null, null],
+  },
+  fold8u: {
+    'D+0': [36, 86, 119, 141, 162, 155],
+    'D+1': [148, 126, 115, 87, 82, 96],
+    'D+2': [98, 82, 83, 80, null, null],
+  },
+  flip8: {
+    'D+0': [6, 9, 27, 27, 30, 41],
+    'D+1': [25, 21, 23, 30, 20, 32],
+    'D+2': [24, 21, 16, 17, null, null],
+  },
+};
+
+// 특정 기종의 D-day 관측 누적 판매량
+function getDailyKPINS(model, dayIdx) {
+  const arr = MODEL_HOURLY[model]?.[`D+${dayIdx}`];
+  if (!arr) return null;
+  const observed = arr.filter(v => v !== null);
+  if (observed.length === 0) return null;
+  return observed.reduce((a, b) => a + b, 0);
+}
 
 // 시간대별 비중 동적 계산 (원본 값으로부터)
 function getPastHourlyRatio(dayKey) {
@@ -467,10 +507,12 @@ function renderTable() {
   const timeIdx = getLatestObservedTimeIdx(dayIdx);
   const today = predictToday(dayIdx, timeIdx);
   
-  let html = `<thead><tr><th>D-day</th><th>목표</th><th>실적/예측</th><th>상태</th><th>목표GAP</th><th>전작대비</th><th>(참고)7시리즈</th></tr></thead><tbody>`;
+  let html = `<thead><tr><th>D-day</th><th>목표</th><th>실적/예측</th><th>상태</th><th>목표GAP</th><th>전작대비</th><th>폴드8시리즈비중</th></tr></thead><tbody>`;
+  
+  // 합계 누적용
+  let sumF8 = 0, sumF7 = 0, sumTotal = 0;
   
   for (let i = 0; i < 26; i++) {
-    const fold7 = FOLD7.sales[i];
     const plan = PLAN[i];
     let value = curve.predicted[i];
     let status = curve.statuses[i];
@@ -484,8 +526,30 @@ function renderTable() {
     const gap = value - plan;
     const gapStr = gap >= 0 ? `+${fmt(gap)}` : fmt(gap);
     const gapColor = gap >= 0 ? 'color:#2ecc71' : 'color:#e74c3c';
-    const vsRatio = fold7 > 0 ? ((value / fold7 * 100) - 100).toFixed(0) + '%' : '-';
-    const vsColor = value >= fold7 ? 'color:#2ecc71' : 'color:#e74c3c';
+    
+    // 전작대비: sum(폴드8+폴드8U+플립8) / sum(폴드7+플립7)
+    const f8Sum = (getDailyKPINS('fold8', i) || 0) + (getDailyKPINS('fold8u', i) || 0) + (getDailyKPINS('flip8', i) || 0);
+    const f7Sum = (getDailyKPINS('fold7', i) || 0) + (getDailyKPINS('flip7', i) || 0);
+    let vsPrevStr = '-';
+    let vsPrevColor = '';
+    if (f8Sum > 0 && f7Sum > 0) {
+      const vsPrev = f8Sum / f7Sum * 100;
+      vsPrevStr = vsPrev.toFixed(0) + '%';
+      vsPrevColor = vsPrev >= 100 ? 'color:#2ecc71' : 'color:#e74c3c';
+      sumF8 += f8Sum;
+      sumF7 += f7Sum;
+    }
+    
+    // 폴드8시리즈비중: sum(폴드8+폴드8U+플립8) / 현재-합계 전기종
+    const totalArr = HOURLY_TOTAL[`D+${i}`];
+    let totalSum = 0;
+    if (totalArr) totalSum = totalArr.filter(v => v !== null).reduce((a, b) => a + b, 0);
+    let shareStr = '-';
+    if (f8Sum > 0 && totalSum > 0) {
+      const share = f8Sum / totalSum * 100;
+      shareStr = share.toFixed(1) + '%';
+      sumTotal += totalSum;
+    }
     
     let tag = '';
     if (status === 'actual') tag = '<span class="tag tag-actual">확정</span>';
@@ -498,8 +562,8 @@ function renderTable() {
       <td><b>${fmt(value)}</b></td>
       <td>${tag}</td>
       <td style="${gapColor}">${gapStr}</td>
-      <td style="${vsColor}">+${vsRatio}</td>
-      <td style="color:#888;">${fmt(fold7)}</td>
+      <td style="${vsPrevColor}">${vsPrevStr}</td>
+      <td>${shareStr}</td>
     </tr>`;
   }
   
@@ -507,12 +571,15 @@ function renderTable() {
   const totalPred = curve.predicted.reduce((a,b) => a+b, 0);
   const totalPlan = PLAN.reduce((a,b) => a+b, 0);
   const totalGap = totalPred - totalPlan;
+  const totalVsPrev = sumF7 > 0 ? (sumF8 / sumF7 * 100).toFixed(0) + '%' : '-';
+  const totalShare = sumTotal > 0 ? (sumF8 / sumTotal * 100).toFixed(1) + '%' : '-';
+  
   html += `<tr style="font-weight:700; background:#f8f9fa;">
     <td>합계</td><td>${fmt(totalPlan)}</td>
     <td>${fmt(totalPred)}</td><td>-</td>
     <td style="${totalGap>=0?'color:#2ecc71':'color:#e74c3c'}">${totalGap>=0?'+':''}${fmt(totalGap)}</td>
-    <td style="color:#2ecc71">+${((totalPred/FOLD7.total-1)*100).toFixed(0)}%</td>
-    <td style="color:#888;">${fmt(FOLD7.total)}</td>
+    <td style="color:#2ecc71">${totalVsPrev}</td>
+    <td>${totalShare}</td>
   </tr>`;
   html += `</tbody>`;
   
