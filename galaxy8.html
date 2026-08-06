@@ -436,17 +436,6 @@ function renderTodayChart() {
     predVals[today.actualCount - 1] = actualVals[today.actualCount - 1];
   }
   
-  // 누적 라인
-  let cumActual = []; let cumPred = []; let runSum = 0;
-  today.predictedHourly.forEach((h, i) => {
-    runSum += h.value;
-    if (h.status === 'actual') { cumActual.push(runSum); cumPred.push(null); }
-    else {
-      if (cumActual.length > 0 && cumPred.filter(v=>v!==null).length === 0) cumPred[i-1] = cumActual[i-1]; // 연결
-      cumActual.push(null); cumPred.push(runSum);
-    }
-  });
-  
   const ctx = document.getElementById('chart-today').getContext('2d');
   if (charts.today) charts.today.destroy();
   
@@ -455,10 +444,8 @@ function renderTodayChart() {
     data: {
       labels,
       datasets: [
-        { label: '구간 실적', data: actualVals, backgroundColor: 'rgba(231,76,60,0.7)', borderRadius: 4, order: 2 },
-        { label: '구간 예측', data: predVals, backgroundColor: 'rgba(231,76,60,0.25)', borderRadius: 4, borderWidth: 1, borderColor: 'rgba(231,76,60,0.5)', order: 2 },
-        { label: '누적 실적', data: cumActual, type: 'line', borderColor: '#1a1a2e', borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#1a1a2e', yAxisID: 'y1', order: 1 },
-        { label: '누적 예측', data: cumPred, type: 'line', borderColor: '#1a1a2e', borderWidth: 2, borderDash: [6,3], pointRadius: 3, pointStyle: 'triangle', yAxisID: 'y1', order: 1 },
+        { label: '구간 실적', data: actualVals, backgroundColor: 'rgba(231,76,60,0.7)', borderRadius: 4 },
+        { label: '구간 예측', data: predVals, backgroundColor: 'rgba(231,76,60,0.25)', borderRadius: 4, borderWidth: 1, borderColor: 'rgba(231,76,60,0.5)' },
       ],
     },
     options: {
@@ -470,7 +457,6 @@ function renderTodayChart() {
       },
       scales: {
         y: { beginAtZero: true, ticks: { callback: v => fmt(v) }, title: { display: true, text: '구간 판매' } },
-        y1: { position: 'right', beginAtZero: true, ticks: { callback: v => fmt(v) }, title: { display: true, text: '누적' }, grid: { drawOnChartArea: false } },
       },
     },
   });
@@ -481,11 +467,10 @@ function renderTable() {
   const timeIdx = getLatestObservedTimeIdx(dayIdx);
   const today = predictToday(dayIdx, timeIdx);
   
-  let html = `<thead><tr><th>D-day</th><th>7시리즈</th><th>비중</th><th>목표</th><th>실적/예측</th><th>상태</th><th>목표GAP</th><th>전작대비</th></tr></thead><tbody>`;
+  let html = `<thead><tr><th>D-day</th><th>목표</th><th>실적/예측</th><th>상태</th><th>목표GAP</th><th>전작대비</th><th>(참고)7시리즈</th></tr></thead><tbody>`;
   
   for (let i = 0; i < 26; i++) {
     const fold7 = FOLD7.sales[i];
-    const ratio = (FOLD7.ratios[i] * 100).toFixed(1) + '%';
     const plan = PLAN[i];
     let value = curve.predicted[i];
     let status = curve.statuses[i];
@@ -509,13 +494,12 @@ function renderTable() {
     
     html += `<tr>
       <td><b>${FOLD7.days[i]}</b></td>
-      <td>${fmt(fold7)}</td>
-      <td>${ratio}</td>
       <td>${fmt(plan)}</td>
       <td><b>${fmt(value)}</b></td>
       <td>${tag}</td>
       <td style="${gapColor}">${gapStr}</td>
       <td style="${vsColor}">+${vsRatio}</td>
+      <td style="color:#888;">${fmt(fold7)}</td>
     </tr>`;
   }
   
@@ -524,10 +508,11 @@ function renderTable() {
   const totalPlan = PLAN.reduce((a,b) => a+b, 0);
   const totalGap = totalPred - totalPlan;
   html += `<tr style="font-weight:700; background:#f8f9fa;">
-    <td>합계</td><td>${fmt(FOLD7.total)}</td><td>100%</td><td>${fmt(totalPlan)}</td>
+    <td>합계</td><td>${fmt(totalPlan)}</td>
     <td>${fmt(totalPred)}</td><td>-</td>
     <td style="${totalGap>=0?'color:#2ecc71':'color:#e74c3c'}">${totalGap>=0?'+':''}${fmt(totalGap)}</td>
     <td style="color:#2ecc71">+${((totalPred/FOLD7.total-1)*100).toFixed(0)}%</td>
+    <td style="color:#888;">${fmt(FOLD7.total)}</td>
   </tr>`;
   html += `</tbody>`;
   
