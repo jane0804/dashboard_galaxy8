@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>휴대폰 판매 예측 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif; background:#f5f7fa; color:#333; }
+.header { background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%); color:#fff; padding:20px 32px; }
+.header h1 { font-size:20px; font-weight:600; }
+.header p { font-size:12px; color:#adb5bd; margin-top:4px; }
+.container { max-width:1200px; margin:0 auto; padding:24px; }
+.card { background:#fff; border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+.card h3 { font-size:15px; margin-bottom:16px; color:#1a1a2e; border-left:3px solid #e74c3c; padding-left:10px; }
+.chart-box { position:relative; height:420px; }
+.kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-bottom:20px; }
+.kpi { background:#f8f9fa; border-radius:8px; padding:14px; text-align:center; }
+.kpi .val { font-size:22px; font-weight:700; color:#1a1a2e; }
+.kpi .lbl { font-size:11px; color:#868e96; margin-top:2px; }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>휴대폰 일별 판매 예측 대시보드</h1>
+<p>데이터 기준: 2026-08-06 (D+2 09시 관측) | 일별예측: 7시리즈 개통기간 비중 역산 | Today 추정: 과거-합계 전보종 시간대 비중 적용</p>
+</div>
+<style>
+.filters { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+.filters label { font-size:12px; color:#666; }
+.filters select { padding:5px 10px; border:1px solid #dee2e6; border-radius:6px; font-size:12px; }
+.legend { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px; }
+.legend-item { display:flex; align-items:center; gap:5px; font-size:12px; }
+.legend-line { width:24px; height:3px; border-radius:2px; }
+.legend-dot { width:8px; height:8px; border-radius:50%; }
+table { width:100%; border-collapse:collapse; font-size:12px; margin-top:12px; }
+th,td { padding:7px 10px; border-bottom:1px solid #eee; text-align:right; }
+th { background:#f8f9fa; font-weight:600; position:sticky; top:0; }
+td:first-child,th:first-child { text-align:left; }
+tr:hover td { background:#f1f3f5; }
+.tag { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px; }
+.tag-actual { background:#d4edda; color:#155724; }
+.tag-pred { background:#fff3cd; color:#856404; }
+.tag-today { background:#d1ecf1; color:#0c5460; }
+.section-divider { border:none; border-top:1px solid #eee; margin:24px 0; }
+.note { font-size:11px; color:#888; margin-top:8px; line-height:1.6; }
+</style>
+<div class="container">
+
+<!-- Section 1: 일별 판매곡선 (목표 vs 실적 vs 예측) -->
+<div class="card">
+<h3>일별 판매곡선 — 목표 vs 실적 vs 예측 (D+0 ~ D+25)</h3>
+<div class="legend">
+  <div class="legend-item"><div class="legend-line" style="background:#aaa;"></div>목표 (Plan)</div>
+  <div class="legend-item"><div class="legend-line" style="background:#e74c3c;"></div><div class="legend-dot" style="background:#e74c3c;"></div>실적 (Actual)</div>
+  <div class="legend-item"><div class="legend-line" style="background:#e74c3c; opacity:0.5; border-top:2px dashed #e74c3c; height:0;"></div>예측 (비중모델)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3498db; border:2px solid #3498db; background:transparent;"></div>Today 추정</div>
+</div>
+<div class="kpi-row" id="kpi-main"></div>
+<div class="chart-box"><canvas id="chart-main"></canvas></div>
+<p class="note">
+  * 예측(비중모델): 7시리즈 개통기간 일별 판매 비중을 8시리즈에 동일 적용. 관측된 실적일 누적합 ÷ 해당 일 누적비중으로 전체 규모를 역산 후, 미관측일은 각 일 비중을 곱해 산출.<br>
+  * Today 추정: Daily Tracker의 "과거-합계 전보종" 시간대별 비중을 사용하여 현재 관측 시점까지의 누적 ÷ 누적비중으로 당일 24시 총량 추정.
+</p>
+</div>
+
+<!-- Section 2: Today 시간대별 추정 -->
+<div class="card">
+<h3>Today 시간대별 추정 — 전기종 합산</h3>
+<div class="filters">
+  <label>기준일:</label>
+  <select id="today-day" onchange="render()">
+    <option value="0">D+0</option>
+    <option value="1" selected>D+1</option>
+  </select>
+  <span id="today-time-display" style="font-size:12px; color:#666;"></span>
+</div>
+<div class="kpi-row" id="kpi-today"></div>
+<div class="chart-box" style="height:300px;"><canvas id="chart-today"></canvas></div>
+</div>
+
+<!-- Section 3: 상세 테이블 -->
+<div class="card">
+<h3>일별 상세 데이터</h3>
+<div class="table-wrapper" style="max-height:500px; overflow-y:auto;">
+<table id="detail-table"></table>
+</div>
+</div>
+
+</div><!-- /container -->
+<script>
+// ============================================================
+// DATA
+// ============================================================
+
+// 진도현황_v2: 7시리즈 일별 판매량 (FlipFold7 - Actual, 전기종)
+const FOLD7 = {
+  days: ['D+0','D+1','D+2','D+3','D+4','D+5','D+6','D+7','D+8','D+9','D+10','D+11',
+         'D+12','D+13','D+14','D+15','D+16','D+17','D+18','D+19','D+20','D+21','D+22','D+23','D+24','D+25'],
+  sales: [1441,2140,1339,1234,956,749,791,834,754,638,735,549,
+          427,600,561,488,485,587,635,505,633,492,536,470,405,338],
+  total: 19322,
+  ratios: [], // 아래서 계산
+};
+FOLD7.ratios = FOLD7.sales.map(s => s / FOLD7.total);
+// 누적비중
+FOLD7.cumRatios = FOLD7.ratios.reduce((acc, r) => { acc.push((acc.length ? acc[acc.length-1] : 0) + r); return acc; }, []);
+
+// 8시리즈 목표 (진도현황_v2 V열)
+const PLAN = [1830,2988,1607,1520,1105,764,942,1059,1053,766,905,634,
+              435,715,713,681,582,723,734,515,754,625,748,564,499,391];
+
+// 8시리즈 실적 (진도현황_v2 W열) - D+0, D+1 확정 (2026-08-06 기준)
+const ACTUAL = [4347, 3588, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null];
+
+// D+0 앵커 날짜 (사전예약 개통일)
+const ANCHOR_DATE = '2026-08-04';
+
+// 시스템 오늘 날짜 기준 D-day 계산
+function getTodayDDay() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const anchor = new Date(ANCHOR_DATE);
+  anchor.setHours(0, 0, 0, 0);
+  const diffMs = today.getTime() - anchor.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+// Daily Tracker: 전보종 시간대별 구간판매량 (2026-08-06 기준)
+// 시간대: [~9시, ~12시, ~15시, ~18시, ~21시, ~24시]
+const HOURLY_TOTAL = {
+  'D+0': [266, 688, 776, 873, 845, 899],  // 합계 4,347 (완전)
+  'D+1': [794, 731, 564, 527, 474, 498],  // 합계 3,588 (완전)
+  'D+2': [474, null, null, null, null, null],  // ~9시까지 관측
+};
+
+// 과거 전보종 시간대별 비중(일) - 7시리즈 D+0~D+3 평균 사용
+// D+0: [2%,7%,16%,23%,22%,29%] → 더 정확하게 D+1 사용
+const HOURLY_RATIO_PAST = {
+  'D+0': [0.06, 0.16, 0.18, 0.20, 0.19, 0.21],  // 전보종 D+0 비중
+  'D+1': [0.23, 0.20, 0.16, 0.16, 0.12, 0.12],  // 폴드7 D+1 비중 기준
+};
+// 실제로는 전보종 비중 사용해야하므로, D+0 실적 기반으로 재계산
+// D+0: 266/4347=6.1%, 688/4347=15.8%, 776/4347=17.9%, 873/4347=20.1%, 845/4347=19.4%, 899/4347=20.7%
+// ============================================================
+// MODEL 1: 비중 역산 모델 (일별 판매곡선 예측)
+// 관측된 일자 누적 ÷ 해당 일 누적비중 = 전체 추정 → 미관측일 = 전체 × 일별비중
+// ============================================================
+
+function predictCurve() {
+  // 확정된 일수 파악
+  let observedDays = 0;
+  let observedSum = 0;
+  for (let i = 0; i < ACTUAL.length; i++) {
+    if (ACTUAL[i] !== null) {
+      observedDays++;
+      observedSum += ACTUAL[i];
+    } else break;
+  }
+  
+  // 관측 일 누적비중
+  const observedCumRatio = FOLD7.cumRatios[observedDays - 1];
+  
+  // 전체 규모 역산
+  const estimatedTotal = Math.round(observedSum / observedCumRatio);
+  
+  // 일별 예측값 생성
+  const predicted = [];
+  const statuses = [];
+  for (let i = 0; i < 26; i++) {
+    if (ACTUAL[i] !== null) {
+      predicted.push(ACTUAL[i]);
+      statuses.push('actual');
+    } else {
+      predicted.push(Math.round(estimatedTotal * FOLD7.ratios[i]));
+      statuses.push('predicted');
+    }
+  }
+  
+  // 누적
+  const cumPredicted = predicted.reduce((acc, v) => { acc.push((acc.length ? acc[acc.length-1] : 0) + v); return acc; }, []);
+  const cumPlan = PLAN.reduce((acc, v) => { acc.push((acc.length ? acc[acc.length-1] : 0) + v); return acc; }, []);
+  
+  return { predicted, statuses, estimatedTotal, observedDays, cumPredicted, cumPlan };
+}
+// ============================================================
+// MODEL 2: Today 추정 (시간대별 비중 기반)
+// Daily Tracker "과거-합계 전보종" D-day별 시간대 비중 사용
+// ============================================================
+
+// 과거-합계 전보종 시간대별 비중(일) - Daily Tracker "과거-합계 전보종**" 행 기준
+// [~9시, ~12시, ~15시, ~18시, ~21시, ~24시] 각 D-day별
+const PAST_TOTAL_HOURLY_RATIO = {
+  'D+0': [0.04, 0.07, 0.16, 0.22, 0.22, 0.29],  // 51+96+235+320+324+415 = 1441
+  'D+1': [0.21, 0.20, 0.16, 0.17, 0.13, 0.13],  // 452+421+340+355+286+286 = 2140
+  'D+2': [0.20, 0.16, 0.15, 0.16, 0.17, 0.16],  // 280+217+209+227+239+227 = 1399
+  'D+3': [0.17, 0.18, 0.16, 0.19, 0.15, 0.15],  // 204+221+199+234+185+191 = 1234
+};
+
+// HOURLY_TOTAL[dayKey]에서 실적이 있는 마지막 시간대 인덱스 반환
+function getLatestObservedTimeIdx(dayIdx) {
+  const dayKey = `D+${dayIdx}`;
+  const hourlyData = HOURLY_TOTAL[dayKey] || [];
+  let idx = -1;
+  for (let i = 0; i < 6; i++) {
+    if (hourlyData[i] !== null && hourlyData[i] !== undefined) idx = i;
+    else break;
+  }
+  return idx;
+}
+
+function predictToday(dayIdx, observedTimeIdx) {
+  const dayKey = `D+${dayIdx}`;
+  const hourlyData = HOURLY_TOTAL[dayKey];
+  if (!hourlyData) return null;
+  
+  // 관측된 시간대까지 누적
+  let observedCum = 0;
+  let actualSlots = [];
+  for (let i = 0; i <= observedTimeIdx; i++) {
+    if (hourlyData[i] === null) break;
+    observedCum += hourlyData[i];
+    actualSlots.push(hourlyData[i]);
+  }
+  const actualCount = actualSlots.length;
+  if (actualCount === 0) return null;
+  
+  // 해당 D-day의 과거-합계 전보종 시간대별 비중 사용 (Daily Tracker 기준)
+  const refRatios = PAST_TOTAL_HOURLY_RATIO[dayKey] || PAST_TOTAL_HOURLY_RATIO['D+1'];
+  
+  // 관측 시점까지의 누적 비중
+  const cumRatioAtTime = refRatios.slice(0, actualCount).reduce((a,b) => a+b, 0);
+  
+  // 24시 총량 추정
+  const predicted24h = Math.round(observedCum / cumRatioAtTime);
+  const additionalSales = predicted24h - observedCum;
+  
+  // 나머지 시간대별 예측
+  const predictedHourly = [];
+  for (let i = 0; i < 6; i++) {
+    if (i < actualCount) {
+      predictedHourly.push({ value: hourlyData[i], status: 'actual' });
+    } else {
+      predictedHourly.push({ value: Math.round(predicted24h * refRatios[i]), status: 'predicted' });
+    }
+  }
+  
+  // 진척률
+  const progressRate = cumRatioAtTime;
+  
+  return {
+    observedCum,
+    predicted24h,
+    additionalSales,
+    progressRate,
+    predictedHourly,
+    actualCount,
+    refRatios,
+  };
+}
+// ============================================================
+// RENDER
+// ============================================================
+let charts = {};
+
+function fmt(n) { return n === null ? '-' : n.toLocaleString('ko-KR'); }
+
+function render() {
+  renderMainChart();
+  renderTodayChart();
+  renderTable();
+}
+
+function renderMainChart() {
+  const curve = predictCurve();
+  const labels = FOLD7.days;
+  
+  // Today 추정 반영: D+1 예측값을 today 모델로 대체
+  const dayIdx = parseInt(document.getElementById('today-day').value);
+  const timeIdx = getLatestObservedTimeIdx(dayIdx);
+  const today = predictToday(dayIdx, timeIdx);
+  
+  let todayPoint = new Array(26).fill(null);
+  if (today && dayIdx < 26) {
+    todayPoint[dayIdx] = today.predicted24h;
+  }
+  
+  // 데이터셋 구성
+  // 1) 목표선 (회색 실선)
+  // 2) 실적선 (빨간 실선 + 채워진 동그라미)
+  // 3) 예측선 (빨간 점선)
+  // 4) Today 추정 (파란 빈 동그라미)
+  
+  const actualData = curve.predicted.map((v, i) => curve.statuses[i] === 'actual' ? v : null);
+  const predData = curve.predicted.map((v, i) => curve.statuses[i] === 'predicted' ? v : null);
+  // 연결점: 실적 마지막 → 예측 첫번째
+  if (curve.observedDays < 26) {
+    predData[curve.observedDays - 1] = actualData[curve.observedDays - 1];
+  }
+  
+  // KPIs
+  const totalPlan = PLAN.reduce((a,b) => a+b, 0);
+  const kpiDiv = document.getElementById('kpi-main');
+  kpiDiv.innerHTML = `
+    <div class="kpi"><div class="val">${fmt(curve.estimatedTotal)}</div><div class="lbl">D+25 예상 총판매</div></div>
+    <div class="kpi"><div class="val">${fmt(totalPlan)}</div><div class="lbl">D+25 목표</div></div>
+    <div class="kpi"><div class="val">${(curve.estimatedTotal/totalPlan*100).toFixed(0)}%</div><div class="lbl">예상 달성률</div></div>
+    <div class="kpi"><div class="val">+${fmt(curve.estimatedTotal - totalPlan)}</div><div class="lbl">목표 대비 차이</div></div>
+    <div class="kpi"><div class="val">${fmt(FOLD7.total)}</div><div class="lbl">7시리즈 총실적</div></div>
+    <div class="kpi"><div class="val">${(curve.estimatedTotal/FOLD7.total*100).toFixed(0)}%</div><div class="lbl">전작 대비</div></div>
+  `;
+  
+  const ctx = document.getElementById('chart-main').getContext('2d');
+  if (charts.main) charts.main.destroy();
+  
+  charts.main = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '목표 (Plan)',
+          data: PLAN,
+          borderColor: '#adb5bd',
+          borderWidth: 2,
+          pointRadius: 2,
+          pointBackgroundColor: '#adb5bd',
+          tension: 0.3,
+          borderDash: [],
+        },
+        {
+          label: '실적 (Actual)',
+          data: actualData,
+          borderColor: '#e74c3c',
+          borderWidth: 2.5,
+          pointRadius: 6,
+          pointBackgroundColor: '#e74c3c',
+          pointStyle: 'circle',
+          tension: 0.3,
+        },
+        {
+          label: '예측 (비중모델)',
+          data: predData,
+          borderColor: 'rgba(231,76,60,0.5)',
+          borderWidth: 2,
+          borderDash: [8, 4],
+          pointRadius: 4,
+          pointBackgroundColor: 'rgba(231,76,60,0.4)',
+          pointStyle: 'triangle',
+          tension: 0.3,
+        },
+        {
+          label: 'Today 추정',
+          data: todayPoint,
+          borderColor: '#3498db',
+          borderWidth: 0,
+          pointRadius: 10,
+          pointBackgroundColor: 'transparent',
+          pointBorderColor: '#3498db',
+          pointBorderWidth: 3,
+          pointStyle: 'circle',
+          showLine: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { usePointStyle: true, font: { size: 12 } } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y)}건` } },
+        annotation: {
+          annotations: {
+            splitLine: {
+              type: 'line',
+              xMin: curve.observedDays - 0.5,
+              xMax: curve.observedDays - 0.5,
+              borderColor: '#dee2e6',
+              borderWidth: 1,
+              borderDash: [4,4],
+              label: { display: true, content: '← 실적 | 예측 →', position: 'start', font: { size: 10 }, color: '#868e96' }
+            }
+          }
+        }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => fmt(v) }, title: { display: true, text: '판매건수' } },
+        x: { title: { display: true, text: 'D-day' } }
+      },
+    },
+  });
+}
+function renderTodayChart() {
+  const dayIdx = parseInt(document.getElementById('today-day').value);
+  const timeIdx = getLatestObservedTimeIdx(dayIdx);
+  const today = predictToday(dayIdx, timeIdx);
+  
+  // 관측 시점 표시 업데이트
+  const timeLabels = ['~09시','~12시','~15시','~18시','~21시','~24시(확정)'];
+  const timeDisplay = document.getElementById('today-time-display');
+  if (timeIdx >= 0) {
+    timeDisplay.innerHTML = `<b>관측 시점:</b> ${timeLabels[timeIdx]} <span style="color:#999;">(자동)</span>`;
+  } else {
+    timeDisplay.innerHTML = `<span style="color:#e74c3c;">관측 데이터 없음</span>`;
+  }
+  
+  const kpiDiv = document.getElementById('kpi-today');
+  if (!today) {
+    kpiDiv.innerHTML = '<div class="kpi"><div class="val">-</div><div class="lbl">데이터 없음</div></div>';
+    return;
+  }
+  
+  kpiDiv.innerHTML = `
+    <div class="kpi"><div class="val">${fmt(today.observedCum)}</div><div class="lbl">현재 누적</div></div>
+    <div class="kpi"><div class="val">${fmt(today.predicted24h)}</div><div class="lbl">24시 예상</div></div>
+    <div class="kpi"><div class="val">+${fmt(today.additionalSales)}</div><div class="lbl">예상 추가</div></div>
+    <div class="kpi"><div class="val">${(today.progressRate*100).toFixed(1)}%</div><div class="lbl">판매진척률</div></div>
+  `;
+  
+  const labels = ['~9시','~12시','~15시','~18시','~21시','~24시'];
+  const actualVals = today.predictedHourly.map(h => h.status === 'actual' ? h.value : null);
+  const predVals = today.predictedHourly.map(h => h.status === 'predicted' ? h.value : null);
+  // 연결점
+  if (today.actualCount < 6) {
+    predVals[today.actualCount - 1] = actualVals[today.actualCount - 1];
+  }
+  
+  // 누적 라인
+  let cumActual = []; let cumPred = []; let runSum = 0;
+  today.predictedHourly.forEach((h, i) => {
+    runSum += h.value;
+    if (h.status === 'actual') { cumActual.push(runSum); cumPred.push(null); }
+    else {
+      if (cumActual.length > 0 && cumPred.filter(v=>v!==null).length === 0) cumPred[i-1] = cumActual[i-1]; // 연결
+      cumActual.push(null); cumPred.push(runSum);
+    }
+  });
+  
+  const ctx = document.getElementById('chart-today').getContext('2d');
+  if (charts.today) charts.today.destroy();
+  
+  charts.today = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: '구간 실적', data: actualVals, backgroundColor: 'rgba(231,76,60,0.7)', borderRadius: 4, order: 2 },
+        { label: '구간 예측', data: predVals, backgroundColor: 'rgba(231,76,60,0.25)', borderRadius: 4, borderWidth: 1, borderColor: 'rgba(231,76,60,0.5)', order: 2 },
+        { label: '누적 실적', data: cumActual, type: 'line', borderColor: '#1a1a2e', borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#1a1a2e', yAxisID: 'y1', order: 1 },
+        { label: '누적 예측', data: cumPred, type: 'line', borderColor: '#1a1a2e', borderWidth: 2, borderDash: [6,3], pointRadius: 3, pointStyle: 'triangle', yAxisID: 'y1', order: 1 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { usePointStyle: true, font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y)}건` } },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => fmt(v) }, title: { display: true, text: '구간 판매' } },
+        y1: { position: 'right', beginAtZero: true, ticks: { callback: v => fmt(v) }, title: { display: true, text: '누적' }, grid: { drawOnChartArea: false } },
+      },
+    },
+  });
+}
+function renderTable() {
+  const curve = predictCurve();
+  const dayIdx = parseInt(document.getElementById('today-day').value);
+  const timeIdx = getLatestObservedTimeIdx(dayIdx);
+  const today = predictToday(dayIdx, timeIdx);
+  
+  let html = `<thead><tr><th>D-day</th><th>7시리즈</th><th>비중</th><th>목표</th><th>실적/예측</th><th>상태</th><th>목표GAP</th><th>전작대비</th></tr></thead><tbody>`;
+  
+  for (let i = 0; i < 26; i++) {
+    const fold7 = FOLD7.sales[i];
+    const ratio = (FOLD7.ratios[i] * 100).toFixed(1) + '%';
+    const plan = PLAN[i];
+    let value = curve.predicted[i];
+    let status = curve.statuses[i];
+    
+    // Today 추정 반영
+    if (i === dayIdx && today && status !== 'actual') {
+      value = today.predicted24h;
+      status = 'today';
+    }
+    
+    const gap = value - plan;
+    const gapStr = gap >= 0 ? `+${fmt(gap)}` : fmt(gap);
+    const gapColor = gap >= 0 ? 'color:#2ecc71' : 'color:#e74c3c';
+    const vsRatio = fold7 > 0 ? ((value / fold7 * 100) - 100).toFixed(0) + '%' : '-';
+    const vsColor = value >= fold7 ? 'color:#2ecc71' : 'color:#e74c3c';
+    
+    let tag = '';
+    if (status === 'actual') tag = '<span class="tag tag-actual">확정</span>';
+    else if (status === 'today') tag = '<span class="tag tag-today">Today</span>';
+    else tag = '<span class="tag tag-pred">예측</span>';
+    
+    html += `<tr>
+      <td><b>${FOLD7.days[i]}</b></td>
+      <td>${fmt(fold7)}</td>
+      <td>${ratio}</td>
+      <td>${fmt(plan)}</td>
+      <td><b>${fmt(value)}</b></td>
+      <td>${tag}</td>
+      <td style="${gapColor}">${gapStr}</td>
+      <td style="${vsColor}">+${vsRatio}</td>
+    </tr>`;
+  }
+  
+  // 합계행
+  const totalPred = curve.predicted.reduce((a,b) => a+b, 0);
+  const totalPlan = PLAN.reduce((a,b) => a+b, 0);
+  const totalGap = totalPred - totalPlan;
+  html += `<tr style="font-weight:700; background:#f8f9fa;">
+    <td>합계</td><td>${fmt(FOLD7.total)}</td><td>100%</td><td>${fmt(totalPlan)}</td>
+    <td>${fmt(totalPred)}</td><td>-</td>
+    <td style="${totalGap>=0?'color:#2ecc71':'color:#e74c3c'}">${totalGap>=0?'+':''}${fmt(totalGap)}</td>
+    <td style="color:#2ecc71">+${((totalPred/FOLD7.total-1)*100).toFixed(0)}%</td>
+  </tr>`;
+  html += `</tbody>`;
+  
+  document.getElementById('detail-table').innerHTML = html;
+}
+
+// ============================================================
+// SELECT UPDATER: Today 추정 기준일 D-day 자동 선택
+// ============================================================
+
+// autoSelect 옵션:
+//  - 'today':  시스템 오늘 D-day로 선택 (없으면 최신 데이터)
+//  - 'latest': 데이터 있는 최신 D-day로 자동 이동
+//  - 'preserve': 사용자가 선택한 값 유지 (없으면 최신)
+function updateTodayDaySelect({ autoSelect = 'preserve' } = {}) {
+  const sel = document.getElementById('today-day');
+  const days = Object.keys(HOURLY_TOTAL).sort((a, b) =>
+    parseInt(a.replace('D+', '')) - parseInt(b.replace('D+', ''))
+  );
+  const currentVal = sel.value;
+  const availableDayNums = days.map(d => d.replace('D+', ''));
+  
+  sel.innerHTML = '';
+  days.forEach(d => {
+    const dayNum = parseInt(d.replace('D+', ''));
+    const opt = document.createElement('option');
+    opt.value = dayNum;
+    opt.textContent = d;
+    sel.appendChild(opt);
+  });
+  
+  if (availableDayNums.length === 0) return;
+  const latestDay = availableDayNums[availableDayNums.length - 1];
+  
+  if (autoSelect === 'latest') {
+    // 최신 데이터 있는 D-day
+    sel.value = latestDay;
+  } else if (autoSelect === 'today') {
+    // 초기 로드: 시스템 오늘 D-day → 데이터 있으면 사용, 없으면 최신
+    const todayDDay = String(getTodayDDay());
+    if (availableDayNums.includes(todayDDay)) {
+      sel.value = todayDDay;
+    } else {
+      sel.value = latestDay;
+    }
+  } else {
+    // preserve: 기존 선택 유지, 없으면 최신
+    sel.value = availableDayNums.includes(currentVal) ? currentVal : latestDay;
+  }
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  updateTodayDaySelect({ autoSelect: 'today' });
+  render();
+});
+</script>
+</body>
+</html>
