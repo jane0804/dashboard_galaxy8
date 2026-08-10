@@ -25,7 +25,7 @@ body { font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif; background:
 <body>
 <div class="header">
 <h1>휴대폰 일별 판매 예측 대시보드</h1>
-<p>데이터 기준: 2026-08-10 (D+6 09시 관측) | 일별예측: 7시리즈 개통기간 비중 역산 | Today 추정: 과거-합계 전보종 시간대 비중 적용</p>
+<p>데이터 기준: 2026-08-10 (D+6 12시 관측) | 일별예측: 7시리즈 개통기간 비중 역산 | Today 추정: 과거-합계 전보종 시간대 비중 적용</p>
 </div>
 <style>
 .filters { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
@@ -138,7 +138,7 @@ const HOURLY_TOTAL = {
   'D+3': [376, 363, 325, 406, 388, 392],     // 합계 2,250 (완전)
   'D+4': [473, 351, 350, 369, 327, 310],     // 합계 2,180 (완전)
   'D+5': [293, 286, 274, 274, 247, 265],     // 합계 1,639 (완전)
-  'D+6': [270, null, null, null, null, null], // ~9시까지 관측
+  'D+6': [270, 334, null, null, null, null], // ~12시까지 관측 (일누적 604)
 };
 
 // 과거 전보종 시간대별 비중(일) - 7시리즈 D+0~D+3 평균 사용
@@ -233,7 +233,7 @@ const MODEL_HOURLY = {
     'D+3': [229, 222, 206, 239, 253, 247],
     'D+4': [307, 208, 207, 218, 193, 197],
     'D+5': [180, 190, 157, 156, 149, 144],
-    'D+6': [156, null, null, null, null, null],
+    'D+6': [156, 201, null, null, null, null],
   },
   fold8u: {
     'D+0': [36, 86, 119, 141, 162, 155],
@@ -242,7 +242,7 @@ const MODEL_HOURLY = {
     'D+3': [70, 55, 51, 74, 70, 72],
     'D+4': [87, 69, 66, 74, 56, 49],
     'D+5': [44, 40, 42, 45, 35, 45],
-    'D+6': [43, null, null, null, null, null],
+    'D+6': [43, 70, null, null, null, null],
   },
   flip8: {
     'D+0': [6, 9, 27, 27, 30, 41],
@@ -251,7 +251,7 @@ const MODEL_HOURLY = {
     'D+3': [20, 16, 11, 21, 11, 17],
     'D+4': [13, 13, 14, 17, 19, 15],
     'D+5': [12, 10, 19, 7, 13, 12],
-    'D+6': [14, null, null, null, null, null],
+    'D+6': [14, 20, null, null, null, null],
   },
 };
 
